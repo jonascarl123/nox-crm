@@ -276,6 +276,15 @@ export default function LeadDetailPage({
                 No past apts scheduled
               </div>
             </CardBox>
+
+            <CardBox title="Cancelled Appointments" icon="📅">
+              <p className="mb-2 text-xs text-slate-400">
+                In customer&apos;s timezone - Central time
+              </p>
+              <div className="rounded-lg bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                No cancelled apts
+              </div>
+            </CardBox>
           </div>
 
           <div className="space-y-6">
