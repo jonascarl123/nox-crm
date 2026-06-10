@@ -75,9 +75,7 @@ export default function DealsPage() {
           Company Deals
         </h1>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" className="!py-1.5 text-xs">
-            V2 Deals
-          </Button>
+        
           <Link href="/customers/new">
             <Button className="!py-1.5 text-xs">+ New Lead</Button>
           </Link>
