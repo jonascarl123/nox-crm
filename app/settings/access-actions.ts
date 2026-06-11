@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { createServerAuthClient } from "@/lib/supabase/server-auth";
+import { sendLoginCodeToEmail } from "@/lib/auth/send-login-code";
 import { requireAdminProfile } from "@/lib/auth/profile";
 
 export type AccessUser = {
@@ -104,18 +104,7 @@ export async function addAccessUser(input: {
 /** Emails a login code to an already-added user (acts as an invite). */
 export async function sendLoginCode(email: string): Promise<AccessResult> {
   await requireAdminProfile();
-  const normalized = normalizeEmail(email);
-  try {
-    const supabase = await createServerAuthClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: normalized,
-      options: { shouldCreateUser: false },
-    });
-    if (error) return { error: error.message };
-    return { ok: true };
-  } catch {
-    return { error: "Sign-in is not configured yet." };
-  }
+  return sendLoginCodeToEmail(email);
 }
 
 export async function removeAccessUser(id: string): Promise<AccessResult> {
