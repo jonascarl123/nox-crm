@@ -1,5 +1,6 @@
 import "server-only";
-import { createServerAuthClient, isAuthConfigured } from "@/lib/supabase/server-auth";
+import { isAuthConfigured } from "@/lib/supabase/auth-env";
+import { createServerAuthClient } from "@/lib/supabase/server-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type Role = "admin" | "member";

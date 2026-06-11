@@ -1,5 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  getSupabaseServerAuthKey,
+  getSupabaseUrl,
+} from "@/lib/supabase/auth-env";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -13,16 +17,15 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const pathname = request.nextUrl.pathname;
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const authKey = getSupabaseServerAuthKey();
 
-  // Auth not configured (missing public keys).
-  if (!url || !anon) {
+  // Auth not configured (missing Supabase URL or keys).
+  if (!url || !authKey) {
     // In development, stay out of the way so the app is usable during setup.
     if (process.env.NODE_ENV !== "production") {
       console.warn(
-        "[auth] NEXT_PUBLIC_SUPABASE_ANON_KEY not set — route protection is disabled."
+        "[auth] Supabase auth keys not set — route protection is disabled."
       );
       return response;
     }
@@ -35,7 +38,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const supabase = createServerClient(url, anon, {
+  const supabase = createServerClient(url, authKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

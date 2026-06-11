@@ -2,7 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserSupabase } from "@/lib/supabase/client";
+import { signOutAction } from "@/app/login/actions";
 
 export type SessionProfile = {
   id: string;
@@ -29,12 +29,7 @@ export function AuthProvider({
   const router = useRouter();
 
   const signOut = async () => {
-    try {
-      const supabase = createBrowserSupabase();
-      await supabase.auth.signOut();
-    } catch {
-      // ignore — still send the user back to login
-    }
+    await signOutAction();
     router.replace("/login");
     router.refresh();
   };

@@ -36,6 +36,15 @@ export async function requestCode(email: string): Promise<ActionResult> {
   }
 }
 
+export async function signOutAction(): Promise<void> {
+  try {
+    const supabase = await createServerAuthClient();
+    await supabase.auth.signOut();
+  } catch {
+    // ignore
+  }
+}
+
 export async function verifyCode(
   email: string,
   token: string

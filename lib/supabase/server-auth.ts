@@ -1,34 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import {
+  getSupabaseServerAuthKey,
+  getSupabaseUrl,
+  isAuthConfigured,
+} from "@/lib/supabase/auth-env";
 
-function authEnv() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
-    process.env.SUPABASE_URL?.trim();
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  return { url, anon };
-}
-
-export function isAuthConfigured() {
-  const { url, anon } = authEnv();
-  return Boolean(url && anon);
-}
+export { isAuthConfigured };
 
 /**
- * Cookie-bound Supabase client for use in Server Components, Server Actions and
- * Route Handlers. Uses the public anon key — never the service role key.
+ * Cookie-bound Supabase client for Server Components, Server Actions and
+ * Route Handlers.
  */
 export async function createServerAuthClient() {
-  const { url, anon } = authEnv();
-  if (!url || !anon) {
+  const url = getSupabaseUrl();
+  const key = getSupabaseServerAuthKey();
+  if (!url || !key) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+      "Missing Supabase URL or auth key (anon or service role)"
     );
   }
 
   const cookieStore = await cookies();
 
-  return createServerClient(url, anon, {
+  return createServerClient(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -40,7 +35,7 @@ export async function createServerAuthClient() {
           );
         } catch {
           // Called from a Server Component — safe to ignore, the session is
-          // refreshed in middleware instead.
+          // refreshed in proxy instead.
         }
       },
     },
