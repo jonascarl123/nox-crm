@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAuth } from "@/lib/auth";
 import {
   appointmentsForUser,
   userById,
+  CURRENT_USER_ID,
   APPT_DAYS,
   APPT_HOURS,
   APPT_WEEK_LABEL,
@@ -35,7 +35,7 @@ function ApptBlock({ a }: { a: Appointment }) {
 }
 
 export default function AppointmentsPage() {
-  const { user } = useAuth();
+  const user = userById(CURRENT_USER_ID);
   const isAdmin = user?.role === "ADMIN";
 
   const [showInHome, setShowInHome] = useState(true);

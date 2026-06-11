@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
-import { useAuth } from "@/lib/auth";
+import { userById, CURRENT_USER_ID } from "@/lib/mock-data";
 import { PageHeader } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
@@ -12,7 +12,7 @@ import { formatDate, isOverdue } from "@/lib/format";
 
 export default function TasksPage() {
   const { tasks, customers, installs, addTask, toggleTask } = useStore();
-  const { user } = useAuth();
+  const user = userById(CURRENT_USER_ID);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     title: "",

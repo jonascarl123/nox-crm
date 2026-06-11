@@ -1,27 +1,48 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { users, CURRENT_USER_ID, type User } from "./mock-data";
+import { createContext, useContext, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { createBrowserSupabase } from "@/lib/supabase/client";
+
+export type SessionProfile = {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  fullName: string | null;
+};
 
 interface AuthValue {
-  user: User | null;
-  loggedIn: boolean;
-  logout: () => void;
-  login: () => void;
+  profile: SessionProfile | null;
+  isAdmin: boolean;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  // Mock auth: start logged in as the hardcoded ADMIN user.
-  const [loggedIn, setLoggedIn] = useState(true);
-  const current = users.find((u) => u.id === CURRENT_USER_ID) ?? null;
+export function AuthProvider({
+  profile,
+  children,
+}: {
+  profile: SessionProfile | null;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+
+  const signOut = async () => {
+    try {
+      const supabase = createBrowserSupabase();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore — still send the user back to login
+    }
+    router.replace("/login");
+    router.refresh();
+  };
 
   const value: AuthValue = {
-    user: loggedIn ? current : null,
-    loggedIn,
-    logout: () => setLoggedIn(false),
-    login: () => setLoggedIn(true),
+    profile,
+    isAdmin: profile?.role === "admin",
+    signOut,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

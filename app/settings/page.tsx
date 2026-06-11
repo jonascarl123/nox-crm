@@ -3,18 +3,23 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { officeById, type Role } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth";
 import { PageHeader, Avatar } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import StatusBadge from "@/components/ui/StatusBadge";
+import AccessUsers from "@/components/settings/AccessUsers";
 
 const ROLES: Role[] = ["ADMIN", "OPS", "REP", "SETTER"];
 const COLORS = ["#10b981", "#6366f1", "#f59e0b", "#ec4899", "#0ea5e9"];
 
+type SettingsTab = "access" | "users" | "offices";
+
 export default function SettingsPage() {
   const { users, offices, addUser } = useStore();
-  const [tab, setTab] = useState<"users" | "offices">("users");
+  const { isAdmin } = useAuth();
+  const [tab, setTab] = useState<SettingsTab>(isAdmin ? "access" : "users");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -45,7 +50,9 @@ export default function SettingsPage() {
       <PageHeader title="Settings" />
 
       <div className="mb-5 inline-flex rounded-lg bg-slate-100 p-1">
-        {(["users", "offices"] as const).map((t) => (
+        {((isAdmin
+          ? ["access", "users", "offices"]
+          : ["users", "offices"]) as SettingsTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -55,12 +62,14 @@ export default function SettingsPage() {
                 : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            {t}
+            {t === "users" ? "Team (demo)" : t}
           </button>
         ))}
       </div>
 
-      {tab === "users" ? (
+      {tab === "access" && isAdmin ? (
+        <AccessUsers />
+      ) : tab === "users" ? (
         <div>
           <div className="mb-4 flex justify-end">
             <Button onClick={() => setOpen(true)}>+ Add User</Button>
