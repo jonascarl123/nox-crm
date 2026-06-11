@@ -9,15 +9,50 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-/** Invite-only: user must exist in profiles before a code is sent. */
-async function isAllowedEmail(email: string) {
+async function findAuthUserId(email: string) {
   const admin = createServerSupabase();
-  const { data } = await admin
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: 200,
+    });
+    if (error) return null;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (match) return match.id;
+    if (data.users.length < 200) break;
+  }
+  return null;
+}
+
+/** Invite-only: user must exist in profiles (or auth.users as fallback). */
+async function isAllowedEmail(
+  email: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  const admin = createServerSupabase();
+  const { data, error } = await admin
     .from("profiles")
     .select("id")
     .eq("email", email)
     .maybeSingle();
-  return Boolean(data);
+
+  if (data) return { allowed: true };
+
+  if (error) {
+    // profiles table missing or misconfigured — fall back to auth.users
+    const authUserId = await findAuthUserId(email);
+    if (authUserId) return { allowed: true };
+    return {
+      allowed: false,
+      reason:
+        "Could not verify access. Ask an admin to run the profiles migration.",
+    };
+  }
+
+  // No profile row — check auth in case seed created auth user only
+  const authUserId = await findAuthUserId(email);
+  if (authUserId) return { allowed: true };
+
+  return { allowed: false };
 }
 
 export async function sendLoginCodeToEmail(
@@ -26,9 +61,21 @@ export async function sendLoginCodeToEmail(
   const normalized = normalizeEmail(email);
   if (!normalized) return { error: "Enter your email address." };
 
-  if (!(await isAllowedEmail(normalized))) {
+  let access: { allowed: boolean; reason?: string };
+  try {
+    access = await isAllowedEmail(normalized);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Server configuration error.";
+    return {
+      error: `Sign-in is not configured on the server: ${message}`,
+    };
+  }
+
+  if (!access.allowed) {
     return {
       error:
+        access.reason ??
         "We couldn't send a code to that email. Make sure an admin has added you.",
     };
   }
@@ -43,7 +90,9 @@ export async function sendLoginCodeToEmail(
 
       const code = data?.properties?.email_otp;
       if (error || !code) {
-        return { error: "Could not generate a login code. Try again." };
+        return {
+          error: error?.message ?? "Could not generate a login code. Try again.",
+        };
       }
 
       await sendLoginCodeEmail({ to: normalized, code });
@@ -63,16 +112,19 @@ export async function sendLoginCodeToEmail(
       options: { shouldCreateUser: false },
     });
     if (error) {
-      return {
-        error:
-          "We couldn't send a code to that email. Make sure an admin has added you.",
-      };
+      if (error.message.includes("only request this after")) {
+        return {
+          error: "Please wait a minute before requesting another code.",
+        };
+      }
+      return { error: error.message };
     }
     return { ok: true };
-  } catch {
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Sign-in is not configured.";
     return {
-      error:
-        "Email is not configured yet. Set Azure Graph env vars or Supabase email.",
+      error: `Email is not configured yet: ${message}`,
     };
   }
 }
