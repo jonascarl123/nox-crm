@@ -7,6 +7,7 @@ import { useStore } from "@/lib/store";
 import { Card } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Field";
 import Button from "@/components/ui/Button";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
 const TEMPLATES = [
   "Axia Solar/Nox - Sales Deal",
@@ -100,9 +101,20 @@ export default function NewDealPage() {
             label="Project Address (if different than customer mailing address)"
             required
           >
-            <Input
+            <AddressAutocomplete
               value={form.projectAddress}
-              onChange={(e) => set("projectAddress", e.target.value)}
+              onChange={(projectAddress) => set("projectAddress", projectAddress)}
+              onSelect={(address) =>
+                setForm((prev) => ({
+                  ...prev,
+                  projectAddress: address.street,
+                  city: address.city || prev.city,
+                  state: address.state || prev.state,
+                  zip: address.zip || prev.zip,
+                }))
+              }
+              placeholder="Start typing project address…"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
             />
           </Field>
 

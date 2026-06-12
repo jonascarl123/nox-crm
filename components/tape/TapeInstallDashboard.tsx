@@ -1,24 +1,29 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { TapeCustomer } from "@/lib/tape/types";
 import { fullAddress } from "@/lib/tape/address";
-import {
-  deriveInstallMilestones,
-  installProgressPercent,
-  type MilestoneStatus,
-} from "@/lib/tape/install-milestones";
+import { INSTALL_MILESTONE_ORDER } from "@/lib/workflow/constants";
+import { inferInstallMilestonesFromTape, milestoneSubLabel } from "@/lib/workflow/infer";
+import { installProgressPercent } from "@/lib/workflow/queries";
+import type {
+  InstallMilestoneState,
+  InstallWorkflowState,
+} from "@/lib/workflow/types";
+import type { InstallMilestoneStatus } from "@/lib/workflow/constants";
+import { updateInstallMilestoneAction } from "@/lib/workflow/actions";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/lib/format";
 
 function Panel({
   title,
   icon,
-  action,
   children,
   className = "",
 }: {
   title?: string;
   icon?: string;
-  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -27,12 +32,11 @@ function Panel({
       className={`rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5 ${className}`}
     >
       {title && (
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="border-b border-slate-100 px-4 py-3">
           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             {icon && <span>{icon}</span>}
             {title}
           </h3>
-          {action}
         </div>
       )}
       <div className="p-4">{children}</div>
@@ -49,7 +53,7 @@ function ProgressNode({
   index: number;
   label: string;
   sub?: string;
-  status: MilestoneStatus | "DONE";
+  status: InstallMilestoneStatus;
 }) {
   const done = status === "DONE";
   return (
@@ -84,23 +88,82 @@ function ProgressNode({
   );
 }
 
+const STATUSES: InstallMilestoneStatus[] = [
+  "PENDING",
+  "IN_PROGRESS",
+  "DONE",
+];
+
+function fallbackMilestones(
+  customer: TapeCustomer
+): InstallMilestoneState[] {
+  const inferred = inferInstallMilestonesFromTape(customer);
+  return INSTALL_MILESTONE_ORDER.map(({ key, label, sortOrder }) => ({
+    id: sortOrder,
+    key,
+    label,
+    sortOrder,
+    status: inferred[key],
+    ownerName: null,
+    dueDate: null,
+    notes: null,
+    sub:
+      key === "deal_signed" && customer.saleDate
+        ? `Completed ${formatDate(customer.saleDate)}`
+        : milestoneSubLabel(inferred[key]),
+  }));
+}
+
 const quickLinks = [
   { label: "Customer Page", href: (id: number) => `/customers/${id}` },
   { label: "Deal", href: (id: number) => `/deals/${id}` },
 ];
 
-const breakdownRows = ["Costs", "System Adders", "Value Adders", "Financing", "Rebates"];
+const breakdownRows = [
+  "Costs",
+  "System Adders",
+  "Value Adders",
+  "Financing",
+  "Rebates",
+];
 
 export default function TapeInstallDashboard({
   customer,
+  workflow,
 }: {
   customer: TapeCustomer;
+  workflow?: InstallWorkflowState | null;
 }) {
+  const [milestones, setMilestones] = useState<InstallMilestoneState[]>(
+    workflow?.milestones ?? fallbackMilestones(customer)
+  );
+  const [pending, startTransition] = useTransition();
+  const canPersist = Boolean(workflow?.projectId);
+
   const address = fullAddress(customer);
   const mapQuery = encodeURIComponent(address);
-  const milestones = deriveInstallMilestones(customer);
   const progress = installProgressPercent(milestones);
   const isCancelled = customer.pipelineStage === "cancelled";
+
+  const updateStatus = (milestoneId: number, status: InstallMilestoneStatus) => {
+    setMilestones((prev) =>
+      prev.map((m) =>
+        m.id === milestoneId
+          ? {
+              ...m,
+              status,
+              sub: milestoneSubLabel(status, m.dueDate ?? undefined),
+            }
+          : m
+      )
+    );
+    if (!canPersist) return;
+    startTransition(async () => {
+      await updateInstallMilestoneAction(customer.tapeRecordId, milestoneId, {
+        status,
+      });
+    });
+  };
 
   return (
     <div>
@@ -166,7 +229,7 @@ export default function TapeInstallDashboard({
               {breakdownRows.map((r) => (
                 <li
                   key={r}
-                  className="flex cursor-pointer items-center justify-between py-2.5 text-sm text-slate-600 hover:text-slate-900"
+                  className="flex items-center justify-between py-2.5 text-sm text-slate-600"
                 >
                   <span className="flex items-center gap-1.5">
                     <span className="text-slate-300">›</span>
@@ -205,30 +268,58 @@ export default function TapeInstallDashboard({
               <span className="text-xs font-semibold text-blue-600">
                 {progress}%
               </span>
+              {pending && (
+                <span className="text-xs text-slate-400">Saving…</span>
+              )}
             </div>
             <div className="scrollbar-thin flex items-start gap-2 overflow-x-auto pb-2">
-              <ProgressNode
-                index={1}
-                label="Deal Signed"
-                sub={
-                  customer.saleDate
-                    ? `Completed ${formatDate(customer.saleDate)}`
-                    : undefined
-                }
-                status={customer.saleDate ? "DONE" : "PENDING"}
-              />
               {milestones.map((m, i) => (
-                <div key={m.name} className="flex items-start gap-2">
-                  <div className="mt-4 h-0.5 w-8 bg-slate-200" />
+                <div key={m.key} className="flex items-start gap-2">
+                  {i > 0 && <div className="mt-4 h-0.5 w-8 bg-slate-200" />}
                   <ProgressNode
-                    index={i + 2}
-                    label={m.name}
+                    index={i + 1}
+                    label={m.label}
                     sub={m.sub}
                     status={m.status}
                   />
                 </div>
               ))}
             </div>
+
+            {canPersist && (
+              <div className="mt-6 space-y-2 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Update milestone
+                </p>
+                {milestones.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium text-slate-700">
+                      {m.label}
+                    </span>
+                    <select
+                      value={m.status}
+                      disabled={pending}
+                      onChange={(e) =>
+                        updateStatus(
+                          m.id,
+                          e.target.value as InstallMilestoneStatus
+                        )
+                      }
+                      className="rounded border border-slate-200 px-2 py-1 text-xs"
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s.replace("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
           </Panel>
 
           <Panel>
@@ -247,14 +338,13 @@ export default function TapeInstallDashboard({
                 </button>
               ))}
             </div>
-
             {customer.notes ? (
               <p className="whitespace-pre-wrap text-sm text-slate-700">
                 {customer.notes}
               </p>
             ) : (
               <p className="text-center text-sm text-slate-400">
-                No activity yet — synced from Tape.
+                No activity yet.
               </p>
             )}
           </Panel>
@@ -287,8 +377,6 @@ export default function TapeInstallDashboard({
                   {l.label}
                 </Link>
               ))}
-              <span className="text-slate-400">Agreement</span>
-              <span className="text-slate-400">Proposal</span>
             </div>
           </Panel>
 

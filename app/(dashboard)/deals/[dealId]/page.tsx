@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import TapeDealWorkflow from "@/components/tape/TapeDealWorkflow";
 import { getTapeCustomerByRecordId } from "@/lib/tape/queries";
+import { getDealWorkflowForTape } from "@/lib/workflow/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +27,7 @@ export default async function DealWorkflowPage({
     );
   }
 
-  return <TapeDealWorkflow customer={customer} />;
+  const workflow = await getDealWorkflowForTape(customer);
+
+  return <TapeDealWorkflow customer={customer} workflow={workflow} />;
 }

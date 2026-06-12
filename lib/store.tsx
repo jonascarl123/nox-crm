@@ -26,6 +26,7 @@ import {
   type MilestoneStatus,
   type DealStage,
 } from "./mock-data";
+import { INSTALL_MILESTONE_ORDER } from "./workflow/constants";
 
 // Deep-clone seed data so edits during a session don't mutate the module export.
 function clone<T>(v: T): T {
@@ -197,13 +198,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           address: `${deal.projectAddress}, ${deal.city}, ${deal.state}`,
           status: "Survey",
           createdAt: today,
-          milestones: [
-            { id: nextId("ms"), name: "Site Survey", order: 1, status: "PENDING", ownerId: "user-3", dueDate: today, notes: "" },
-            { id: nextId("ms"), name: "Permitting", order: 2, status: "PENDING", ownerId: "user-3", dueDate: today, notes: "" },
-            { id: nextId("ms"), name: "Installation", order: 3, status: "PENDING", ownerId: "user-3", dueDate: today, notes: "" },
-            { id: nextId("ms"), name: "Inspection", order: 4, status: "PENDING", ownerId: "user-3", dueDate: today, notes: "" },
-            { id: nextId("ms"), name: "PTO", order: 5, status: "PENDING", ownerId: "user-1", dueDate: today, notes: "" },
-          ],
+          milestones: INSTALL_MILESTONE_ORDER.map((m, i) => ({
+            id: nextId("ms"),
+            name: m.label,
+            order: m.sortOrder,
+            status: i === 0 ? ("IN_PROGRESS" as const) : ("PENDING" as const),
+            ownerId: "user-3",
+            dueDate: today,
+            notes: "",
+          })),
         };
         return [newInstall, ...prev];
       });

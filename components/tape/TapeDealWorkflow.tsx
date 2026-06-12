@@ -1,24 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { TapeCustomer } from "@/lib/tape/types";
 import { fullAddress } from "@/lib/tape/address";
 import {
-  TAPE_DEAL_STEP_ORDER,
-  TAPE_DEAL_STEP_LABELS,
-  activeDealStep,
-  inferDealSteps,
-  type TapeDealStep,
-} from "@/lib/tape/deal-steps";
+  DEAL_STEP_LABELS,
+  DEAL_STEP_ORDER,
+  activeDealStepKey,
+  type DealStepKey,
+  type DealStepStatus,
+} from "@/lib/workflow/constants";
+import { inferDealStepsFromTape } from "@/lib/workflow/infer";
+import type { DealWorkflowState } from "@/lib/workflow/types";
+import { completeDealStepAction } from "@/lib/workflow/actions";
 import StatusBadge from "@/components/ui/StatusBadge";
+import Button from "@/components/ui/Button";
 import { currency, formatDate } from "@/lib/format";
 
 function StepPanel({
   step,
   customer,
 }: {
-  step: TapeDealStep;
+  step: DealStepKey;
   customer: TapeCustomer;
 }) {
   const rows: [string, string | null | undefined][] = [];
@@ -41,7 +45,12 @@ function StepPanel({
     case "proposal":
       rows.push(
         ["SOW", customer.sowAmount != null ? currency(customer.sowAmount) : null],
-        ["Gross account value", customer.grossAccountValue != null ? currency(customer.grossAccountValue) : null],
+        [
+          "Gross account value",
+          customer.grossAccountValue != null
+            ? currency(customer.grossAccountValue)
+            : null,
+        ],
         ["Product", customer.productName]
       );
       break;
@@ -61,7 +70,12 @@ function StepPanel({
     case "submission":
       rows.push(
         ["Job Status", customer.jobStatus],
-        ["Install completed", customer.installCompletedDate ? formatDate(customer.installCompletedDate) : null],
+        [
+          "Install completed",
+          customer.installCompletedDate
+            ? formatDate(customer.installCompletedDate)
+            : null,
+        ],
         ["Office", customer.officeName]
       );
       break;
@@ -70,14 +84,17 @@ function StepPanel({
   return (
     <div>
       <h2 className="mb-1 text-lg font-semibold text-slate-900">
-        {TAPE_DEAL_STEP_LABELS[step]}
+        {DEAL_STEP_LABELS[step]}
       </h2>
       <p className="mb-6 text-sm text-slate-500">
-        Data synced from Tape. Workflow actions will be available in a future release.
+        Tape baseline shown below. Complete each step to advance the workflow.
       </p>
       <dl className="divide-y divide-slate-100 rounded-lg border border-slate-100">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex justify-between gap-4 px-4 py-3 text-sm">
+          <div
+            key={label}
+            className="flex justify-between gap-4 px-4 py-3 text-sm"
+          >
             <dt className="font-medium text-slate-600">{label}</dt>
             <dd className="text-right text-slate-900">{value ?? "—"}</dd>
           </div>
@@ -95,18 +112,48 @@ function StepPanel({
 
 export default function TapeDealWorkflow({
   customer,
+  workflow,
 }: {
   customer: TapeCustomer;
+  workflow?: DealWorkflowState | null;
 }) {
-  const steps = inferDealSteps(customer.jobStatus, customer.ntpAppStatus);
-  const [current, setCurrent] = useState<TapeDealStep>(activeDealStep(steps));
-  const idx = TAPE_DEAL_STEP_ORDER.indexOf(current);
+  const fallback = inferDealStepsFromTape(
+    customer.jobStatus,
+    customer.ntpAppStatus
+  );
+  const [steps, setSteps] = useState<Record<DealStepKey, DealStepStatus>>(
+    workflow?.steps ?? fallback
+  );
+  const [current, setCurrent] = useState<DealStepKey>(
+    activeDealStepKey(workflow?.steps ?? fallback)
+  );
+  const [pending, startTransition] = useTransition();
+  const idx = DEAL_STEP_ORDER.indexOf(current);
   const address = fullAddress(customer);
+  const canPersist = Boolean(workflow?.projectId);
 
-  const goBack = () => idx > 0 && setCurrent(TAPE_DEAL_STEP_ORDER[idx - 1]);
+  const goBack = () => idx > 0 && setCurrent(DEAL_STEP_ORDER[idx - 1]);
   const skip = () =>
-    idx < TAPE_DEAL_STEP_ORDER.length - 1 &&
-    setCurrent(TAPE_DEAL_STEP_ORDER[idx + 1]);
+    idx < DEAL_STEP_ORDER.length - 1 &&
+    setCurrent(DEAL_STEP_ORDER[idx + 1]);
+
+  const completeStep = () => {
+    if (!workflow?.projectId || steps[current] === "complete") return;
+    startTransition(async () => {
+      await completeDealStepAction(
+        workflow.projectId,
+        customer.tapeRecordId,
+        current
+      );
+      const nextSteps = { ...steps, [current]: "complete" as const };
+      const nextIdx = idx + 1;
+      if (nextIdx < DEAL_STEP_ORDER.length) {
+        nextSteps[DEAL_STEP_ORDER[nextIdx]] = "active";
+        setCurrent(DEAL_STEP_ORDER[nextIdx]);
+      }
+      setSteps(nextSteps);
+    });
+  };
 
   return (
     <div className="-m-6">
@@ -136,9 +183,7 @@ export default function TapeDealWorkflow({
           {address && <span>📍 {address}</span>}
           <span>👤 Closer: {customer.closer1 ?? "—"}</span>
           <span>👤 Setter: {customer.setter1 ?? "—"}</span>
-          <span>
-            ＃ Deal ID: {customer.pid ?? customer.tapeRecordId}
-          </span>
+          <span>＃ Deal ID: {customer.pid ?? customer.tapeRecordId}</span>
         </div>
       </div>
 
@@ -147,11 +192,11 @@ export default function TapeDealWorkflow({
           <div className="flex gap-8 p-6">
             <nav className="w-56 shrink-0">
               <ul className="relative space-y-1">
-                {TAPE_DEAL_STEP_ORDER.map((step, i) => {
+                {DEAL_STEP_ORDER.map((step, i) => {
                   const status = steps[step];
                   const isCurrent = step === current;
                   const complete = status === "complete";
-                  const isLast = i === TAPE_DEAL_STEP_ORDER.length - 1;
+                  const isLast = i === DEAL_STEP_ORDER.length - 1;
 
                   return (
                     <li key={step} className="relative">
@@ -202,7 +247,7 @@ export default function TapeDealWorkflow({
                                 : "text-slate-500"
                           }`}
                         >
-                          {TAPE_DEAL_STEP_LABELS[step]}
+                          {DEAL_STEP_LABELS[step]}
                         </span>
                       </button>
                     </li>
@@ -216,7 +261,7 @@ export default function TapeDealWorkflow({
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-4">
             <button
               type="button"
               onClick={goBack}
@@ -225,16 +270,28 @@ export default function TapeDealWorkflow({
             >
               ‹ Back
             </button>
-            <Link
-              href={`/customers/${customer.tapeRecordId}`}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              View lead profile
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/customers/${customer.tapeRecordId}`}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                View lead profile
+              </Link>
+              {canPersist && steps[current] !== "complete" && (
+                <Button
+                  type="button"
+                  disabled={pending}
+                  onClick={completeStep}
+                  className="!py-2 text-sm"
+                >
+                  {pending ? "Saving…" : "Complete step"}
+                </Button>
+              )}
+            </div>
             <button
               type="button"
               onClick={skip}
-              disabled={idx === TAPE_DEAL_STEP_ORDER.length - 1}
+              disabled={idx === DEAL_STEP_ORDER.length - 1}
               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
             >
               Skip for now ›

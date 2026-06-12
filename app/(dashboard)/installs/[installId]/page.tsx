@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import TapeInstallDashboard from "@/components/tape/TapeInstallDashboard";
 import { getTapeCustomerByRecordId } from "@/lib/tape/queries";
+import { getInstallWorkflowForTape } from "@/lib/workflow/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +27,9 @@ export default async function InstallDashboardPage({
     );
   }
 
-  return <TapeInstallDashboard customer={customer} />;
+  const workflow = await getInstallWorkflowForTape(customer);
+
+  return (
+    <TapeInstallDashboard customer={customer} workflow={workflow} />
+  );
 }

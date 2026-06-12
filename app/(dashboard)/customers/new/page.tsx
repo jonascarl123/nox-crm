@@ -8,6 +8,7 @@ import {
   LEAD_SOURCES,
   US_STATES,
 } from "@/lib/mock-data";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
 const inputCls =
   "w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20";
@@ -228,11 +229,20 @@ export default function NewLeadPage() {
             Project Address
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_280px]">
-            <input
-              className={inputCls}
-              placeholder="Street address"
+            <AddressAutocomplete
               value={f.street}
-              onChange={(e) => set("street", e.target.value)}
+              onChange={(street) => set("street", street)}
+              onSelect={(address) =>
+                setF((prev) => ({
+                  ...prev,
+                  street: address.street,
+                  city: address.city || prev.city,
+                  state: address.state || prev.state,
+                  zip: address.zip || prev.zip,
+                }))
+              }
+              placeholder="Street address"
+              disabled={f.ignoreAddress}
             />
             <input
               className={inputCls}
