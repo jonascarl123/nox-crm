@@ -10,6 +10,8 @@ export type ParsedAddress = {
 export type AddressSuggestion = ParsedAddress & {
   id: string;
   label: string;
+  /** Google Places — fetch `/api/address/place` on select. */
+  placeId?: string;
 };
 
 export type NominatimAddress = {

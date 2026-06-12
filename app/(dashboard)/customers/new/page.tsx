@@ -103,7 +103,7 @@ export default function NewLeadPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5">
+      <div className="rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5">
         {/* Header */}
         <div className="border-b border-slate-200 px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-800">

@@ -26,7 +26,7 @@ export default function AddressAutocomplete({
   value,
   onChange,
   onSelect,
-  placeholder = "Start typing an address…",
+  placeholder = "Start typing a US address…",
   className = inputCls,
   disabled = false,
 }: AddressAutocompleteProps) {
@@ -34,21 +34,51 @@ export default function AddressAutocomplete({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [minLength, setMinLength] = useState(3);
+  const [provider, setProvider] = useState<"google" | "nominatim">("nominatim");
 
   const pick = useCallback(
-    (item: AddressSuggestion) => {
-      onChange(item.street);
-      onSelect({
-        street: item.street,
-        city: item.city,
-        state: item.state,
-        zip: item.zip,
-        lat: item.lat,
-        lng: item.lng,
-      });
+    async (item: AddressSuggestion) => {
+      setError(null);
+
+      if (item.placeId) {
+        setResolving(true);
+        try {
+          const res = await fetch(
+            `/api/address/place?placeId=${encodeURIComponent(item.placeId)}`
+          );
+          const data = (await res.json()) as {
+            address?: ParsedAddress;
+            error?: string;
+          };
+          if (!res.ok || !data.address) {
+            setError(data.error ?? "Could not load address details");
+            return;
+          }
+          onChange(data.address.street);
+          onSelect(data.address);
+        } catch {
+          setError("Could not load address details");
+          return;
+        } finally {
+          setResolving(false);
+        }
+      } else {
+        onChange(item.street);
+        onSelect({
+          street: item.street,
+          city: item.city,
+          state: item.state,
+          zip: item.zip,
+          lat: item.lat,
+          lng: item.lng,
+        });
+      }
+
       setOpen(false);
       setSuggestions([]);
       setHighlight(0);
@@ -57,10 +87,10 @@ export default function AddressAutocomplete({
   );
 
   useEffect(() => {
-    if (disabled || value.trim().length < 3) {
+    if (disabled || value.trim().length < minLength) {
       setSuggestions([]);
       setOpen(false);
-      setLoading(false);
+      if (!resolving) setLoading(false);
       return;
     }
 
@@ -76,7 +106,12 @@ export default function AddressAutocomplete({
         const data = (await res.json()) as {
           suggestions?: AddressSuggestion[];
           error?: string;
+          minLength?: number;
+          provider?: "google" | "nominatim";
         };
+        if (data.minLength) setMinLength(data.minLength);
+        if (data.provider) setProvider(data.provider);
+
         if (!res.ok) {
           setError(data.error ?? "Could not search addresses");
           setSuggestions([]);
@@ -95,13 +130,13 @@ export default function AddressAutocomplete({
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 300);
 
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [value, disabled]);
+  }, [value, disabled, minLength, resolving]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -126,11 +161,13 @@ export default function AddressAutocomplete({
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
-      pick(suggestions[highlight]);
+      void pick(suggestions[highlight]);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
   };
+
+  const hintMin = minLength;
 
   return (
     <div ref={rootRef} className="relative">
@@ -141,7 +178,7 @@ export default function AddressAutocomplete({
         aria-controls={listId}
         aria-autocomplete="list"
         autoComplete="off"
-        disabled={disabled}
+        disabled={disabled || resolving}
         className={className}
         placeholder={placeholder}
         value={value}
@@ -155,18 +192,34 @@ export default function AddressAutocomplete({
         onKeyDown={onKeyDown}
       />
 
-      {loading && (
-        <p className="mt-1 text-xs text-slate-400">Searching addresses…</p>
+      {value.trim().length > 0 && value.trim().length < hintMin && (
+        <p className="mt-1 text-xs text-slate-400">
+          Type at least {hintMin} characters for US address suggestions
+        </p>
       )}
-      {error && !loading && (
+
+      {(loading || resolving) && (
+        <p className="mt-1 text-xs text-slate-400">
+          {resolving ? "Loading address…" : "Searching addresses…"}
+        </p>
+      )}
+      {error && !loading && !resolving && (
         <p className="mt-1 text-xs text-amber-600">{error}</p>
       )}
+
+      {value.trim().length >= hintMin &&
+        !loading &&
+        !resolving &&
+        suggestions.length === 0 &&
+        !error && (
+          <p className="mt-1 text-xs text-slate-400">No US addresses found</p>
+        )}
 
       {open && suggestions.length > 0 && (
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
         >
           {suggestions.map((item, i) => (
             <li key={item.id} role="option" aria-selected={i === highlight}>
@@ -178,13 +231,26 @@ export default function AddressAutocomplete({
                     : "text-slate-700 hover:bg-slate-50"
                 }`}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(item)}
+                onClick={() => void pick(item)}
                 onMouseEnter={() => setHighlight(i)}
               >
-                <span className="block font-medium">{item.street}</span>
-                <span className="block text-xs text-slate-500">
-                  {[item.city, item.state, item.zip].filter(Boolean).join(", ")}
+                <span className="block font-medium">
+                  {item.placeId
+                    ? item.label
+                    : item.street || item.label}
                 </span>
+                {!item.placeId && (
+                  <span className="block text-xs text-slate-500">
+                    {[item.city, item.state, item.zip]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                )}
+                {item.placeId && provider === "google" && (
+                  <span className="block text-xs text-slate-400">
+                    Google Places · US only
+                  </span>
+                )}
               </button>
             </li>
           ))}
