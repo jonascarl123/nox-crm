@@ -173,3 +173,30 @@ export const listTapeInstalls = cache(async () => {
   const customers = await loadCustomers(INSTALL_STAGES);
   return customers.filter((c) => INSTALL_STAGES.includes(c.pipelineStage));
 });
+
+export async function getTapeCustomerByRecordId(
+  tapeRecordId: number
+): Promise<TapeCustomer | null> {
+  const supabase = createServerSupabase();
+  const schema = await getTapeSchema();
+
+  const optionalColumns = [
+    ...(schema.hasPipeline ? PIPELINE_COLUMNS : []),
+    ...(schema.hasOrg ? ORG_COLUMNS : []),
+  ];
+  const select = [...BASE_COLUMNS, ...optionalColumns].join(", ");
+
+  const result = await supabase
+    .from("tape_customers")
+    .select(select)
+    .eq("tape_record_id", tapeRecordId)
+    .maybeSingle();
+
+  if (result.error) throw new Error(result.error.message);
+  if (!result.data) return null;
+
+  return toTapeCustomer(
+    result.data as unknown as TapeCustomerRow,
+    readPipelineIndex()
+  );
+}
