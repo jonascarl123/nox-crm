@@ -1,5 +1,5 @@
 import TapeTableLoading from "@/components/tape/TapeTableLoading";
 
-export default function Loading() {
+export default function DashboardLoading() {
   return <TapeTableLoading />;
 }

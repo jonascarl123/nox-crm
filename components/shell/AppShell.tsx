@@ -1,19 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-
-  // The login page renders full-screen without the app chrome. Middleware
-  // guarantees every other route is reached only by an authenticated user.
-  if (pathname === "/login") {
-    return <>{children}</>;
-  }
-
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

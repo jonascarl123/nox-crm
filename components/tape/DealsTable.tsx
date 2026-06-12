@@ -84,7 +84,7 @@ export default function DealsTable({ deals }: { deals: TapeCustomer[] }) {
         </Link>
       </div>
       <p className="mb-4 text-sm text-slate-500">
-        Sold projects from Tape — deals, installs, and cancelled
+        Ongoing sold deals from Tape — not yet closed
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">

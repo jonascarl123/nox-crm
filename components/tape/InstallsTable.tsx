@@ -63,7 +63,7 @@ export default function InstallsTable({
           Install Project Tracker
         </h1>
         <span className="text-sm text-slate-500">
-          {installs.length} projects (active + cancelled)
+          {installs.length} closed deals (installed + cancelled)
         </span>
       </div>
 

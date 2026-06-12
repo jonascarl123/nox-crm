@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { AuthProvider, type SessionProfile } from "@/lib/auth";
 import { StoreProvider } from "@/lib/store";
-import AppShell from "@/components/shell/AppShell";
 
 export default function Providers({
   profile,
@@ -14,9 +13,7 @@ export default function Providers({
 }) {
   return (
     <AuthProvider profile={profile}>
-      <StoreProvider>
-        <AppShell>{children}</AppShell>
-      </StoreProvider>
+      <StoreProvider>{children}</StoreProvider>
     </AuthProvider>
   );
 }

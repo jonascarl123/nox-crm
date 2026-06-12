@@ -41,7 +41,6 @@ async function findUserIdByEmail(
   admin: ReturnType<typeof createServerSupabase>,
   email: string
 ): Promise<string | null> {
-  // listUsers is paginated; scan a few pages for small teams.
   for (let page = 1; page <= 10; page++) {
     const { data, error } = await admin.auth.admin.listUsers({
       page,
@@ -71,7 +70,6 @@ export async function addAccessUser(input: {
   const fullName = input.fullName?.trim() || null;
   const admin = createServerSupabase();
 
-  // Create the auth user (no password — they sign in with an emailed code).
   const { data: created, error: createErr } =
     await admin.auth.admin.createUser({
       email,
@@ -81,7 +79,6 @@ export async function addAccessUser(input: {
 
   let userId = created?.user?.id ?? null;
   if (createErr && !userId) {
-    // Likely already registered — reuse the existing auth user.
     userId = await findUserIdByEmail(admin, email);
     if (!userId) return { error: createErr.message };
   }
@@ -101,7 +98,6 @@ export async function addAccessUser(input: {
   return { ok: true };
 }
 
-/** Emails a login code to an already-added user (acts as an invite). */
 export async function sendLoginCode(email: string): Promise<AccessResult> {
   await requireAdminProfile();
   return sendLoginCodeToEmail(email);

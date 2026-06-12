@@ -11,7 +11,7 @@ import {
   removeAccessUser,
   sendLoginCode,
   type AccessUser,
-} from "@/app/settings/access-actions";
+} from "@/lib/auth/access-actions";
 
 export default function AccessUsers() {
   const [usersList, setUsersList] = useState<AccessUser[]>([]);

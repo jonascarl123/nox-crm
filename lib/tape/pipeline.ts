@@ -86,11 +86,17 @@ function hasDeal(signals: PipelineSignals): boolean {
 }
 
 export function classifyPipelineStage(signals: PipelineSignals): PipelineStage {
-  if (isCancelled(signals)) return "cancelled";
+  if (isCancelled(signals)) {
+    // Closed deals — sold or had install work before cancel → Installs tab
+    if (hasDeal(signals) || hasInstall(signals)) return "cancelled";
+    return "lead";
+  }
   if (hasInstall(signals)) return "install";
   if (hasDeal(signals)) return "deal";
   return "lead";
 }
 
-export const DEAL_STAGES: PipelineStage[] = ["deal", "install", "cancelled"];
+/** Ongoing sold deals — not yet closed */
+export const DEAL_STAGES: PipelineStage[] = ["deal"];
+/** Closed deals — installed or cancelled out */
 export const INSTALL_STAGES: PipelineStage[] = ["install", "cancelled"];
