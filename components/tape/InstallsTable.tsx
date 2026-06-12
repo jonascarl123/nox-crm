@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { TapeCustomer } from "@/lib/tape/types";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { formatDate } from "@/lib/format";
 
 const COLUMNS = [
+  "View",
   "PID",
   "Customer",
   "Division",
@@ -45,6 +47,7 @@ export default function InstallsTable({
 }: {
   installs: TapeCustomer[];
 }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -92,14 +95,32 @@ export default function InstallsTable({
               {filtered.map((inst) => (
                 <tr
                   key={inst.tapeRecordId}
-                  className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(`/installs/${inst.tapeRecordId}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      router.push(`/installs/${inst.tapeRecordId}`);
+                    }
+                  }}
+                  className="cursor-pointer border-b border-slate-50 last:border-0 hover:bg-slate-50"
                 >
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <Link
+                      href={`/installs/${inst.tapeRecordId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                    >
+                      View
+                    </Link>
+                  </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">
                     {inst.pid ?? inst.tapeRecordId}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 font-medium text-blue-600">
                     <Link
-                      href={`/customers/${inst.tapeRecordId}`}
+                      href={`/installs/${inst.tapeRecordId}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="hover:underline"
                     >
                       {inst.customerName ?? "—"}

@@ -67,6 +67,23 @@ export default function TapeLeadDetail({ customer }: { customer: TapeCustomer })
           {customer.jobStatus && (
             <StatusBadge value={customer.jobStatus} />
           )}
+          {customer.pipelineStage === "deal" && (
+            <Link
+              href={`/deals/${customer.tapeRecordId}`}
+              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Open Deal
+            </Link>
+          )}
+          {(customer.pipelineStage === "install" ||
+            customer.pipelineStage === "cancelled") && (
+            <Link
+              href={`/installs/${customer.tapeRecordId}`}
+              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Open Install
+            </Link>
+          )}
         </div>
       </div>
 
