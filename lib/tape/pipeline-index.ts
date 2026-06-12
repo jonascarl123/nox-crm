@@ -17,18 +17,42 @@ export type PipelineIndexEntry = {
 
 export type PipelineIndex = Record<string, PipelineIndexEntry>;
 
-const INDEX_PATH = resolve(process.cwd(), "tape-pipeline.json");
+/** Bundled index shipped with the app (works on Vercel without a local build step). */
+const BUNDLED_INDEX_PATH = resolve(
+  process.cwd(),
+  "data/tape-pipeline.json"
+);
+
+/** Local dev output from import / build-pipeline-index (optional override). */
+const LOCAL_INDEX_PATH = resolve(process.cwd(), "tape-pipeline.json");
+
+let memoryCache: PipelineIndex | null = null;
 
 export function writePipelineIndex(index: PipelineIndex) {
-  writeFileSync(INDEX_PATH, JSON.stringify(index, null, 2));
+  const json = JSON.stringify(index, null, 2);
+  writeFileSync(LOCAL_INDEX_PATH, json);
+  writeFileSync(BUNDLED_INDEX_PATH, json);
+  memoryCache = index;
+}
+
+function readIndexFile(path: string): PipelineIndex | null {
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as PipelineIndex;
+  } catch {
+    return null;
+  }
 }
 
 export function readPipelineIndex(): PipelineIndex {
-  try {
-    return JSON.parse(readFileSync(INDEX_PATH, "utf-8")) as PipelineIndex;
-  } catch {
-    return {};
-  }
+  if (memoryCache) return memoryCache;
+
+  // Prefer freshly generated local index during dev; fall back to bundled data.
+  memoryCache =
+    readIndexFile(LOCAL_INDEX_PATH) ??
+    readIndexFile(BUNDLED_INDEX_PATH) ??
+    {};
+
+  return memoryCache;
 }
 
 export function mergePipelineIndex(

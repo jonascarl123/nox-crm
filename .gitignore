@@ -40,6 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# tape sync output
+# tape sync output (local dev only — bundled copy lives in data/)
+/tape-pipeline.json
 customers.json
-tape-pipeline.json
+!data/tape-pipeline.json

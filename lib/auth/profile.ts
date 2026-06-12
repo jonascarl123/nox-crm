@@ -1,4 +1,5 @@
-import "server-only";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { isAuthConfigured } from "@/lib/supabase/auth-env";
 import { createServerAuthClient } from "@/lib/supabase/server-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -12,7 +13,7 @@ export type SessionProfile = {
   fullName: string | null;
 };
 
-export async function getSessionUser() {
+export const getSessionUser = cache(async () => {
   if (!isAuthConfigured()) return null;
   try {
     const supabase = await createServerAuthClient();
@@ -23,20 +24,15 @@ export async function getSessionUser() {
   } catch {
     return null;
   }
-}
+});
 
-export async function getCurrentProfile(): Promise<SessionProfile | null> {
-  const user = await getSessionUser();
-  if (!user) return null;
-
-  // Profiles are read with the service-role client (RLS-exempt) so the lookup
-  // works the same in middleware, layouts and server actions.
+async function fetchProfile(userId: string, email: string): Promise<SessionProfile> {
   try {
     const admin = createServerSupabase();
     const { data } = await admin
       .from("profiles")
       .select("id, email, role, full_name")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single();
 
     if (data) {
@@ -48,16 +44,29 @@ export async function getCurrentProfile(): Promise<SessionProfile | null> {
       };
     }
   } catch {
-    // profiles table may not exist yet — fall through to a minimal profile.
+    // profiles table may not exist yet
   }
 
   return {
-    id: user.id,
-    email: user.email ?? "",
+    id: userId,
+    email,
     role: "member",
     fullName: null,
   };
 }
+
+const getCachedProfile = (userId: string, email: string) =>
+  unstable_cache(
+    async () => fetchProfile(userId, email),
+    ["session-profile", userId],
+    { revalidate: 120 }
+  )();
+
+export const getCurrentProfile = cache(async (): Promise<SessionProfile | null> => {
+  const user = await getSessionUser();
+  if (!user) return null;
+  return getCachedProfile(user.id, user.email ?? "");
+});
 
 export async function requireAdminProfile(): Promise<SessionProfile> {
   const profile = await getCurrentProfile();

@@ -10,7 +10,8 @@
     "fetch-tape-customers": "tsx scripts/fetch-tape-customers.ts",
     "import-tape-customers": "tsx scripts/import-tape-customers.ts",
     "build-pipeline-index": "tsx scripts/build-pipeline-index.ts",
-    "seed-admin": "tsx scripts/seed-admin.ts"
+    "seed-admin": "tsx scripts/seed-admin.ts",
+    "sync-pipeline-to-db": "tsx scripts/sync-pipeline-to-db.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

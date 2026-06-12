@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   classifyPipelineStage,
@@ -6,8 +8,9 @@ import {
   signalsFromRow,
 } from "@/lib/tape/pipeline";
 import { mergePipelineIndex, readPipelineIndex } from "@/lib/tape/pipeline-index";
+import { getTapeSchema } from "@/lib/tape/schema";
 import { cleanRepTitle } from "@/lib/tape/org";
-import type { TapeCustomer, TapeCustomerRow } from "@/lib/tape/types";
+import type { PipelineStage, TapeCustomer, TapeCustomerRow } from "@/lib/tape/types";
 
 const BASE_COLUMNS = [
   "id",
@@ -33,14 +36,14 @@ const BASE_COLUMNS = [
   "setter_1",
   "closer_2",
   "synced_at",
-];
+] as const;
 
 const PIPELINE_COLUMNS = [
   "ntp_app_status",
   "install_completed_date",
   "pipeline_stage",
   "has_install",
-];
+] as const;
 
 const ORG_COLUMNS = [
   "division",
@@ -50,9 +53,7 @@ const ORG_COLUMNS = [
   "dealer_name",
   "state",
   "market",
-];
-
-const OPTIONAL_COLUMNS = [...PIPELINE_COLUMNS, ...ORG_COLUMNS];
+] as const;
 
 function toTapeCustomer(
   row: TapeCustomerRow,
@@ -99,10 +100,7 @@ function toTapeCustomer(
     setter1: cleanRepTitle(row.setter_1),
     closer2: cleanRepTitle(row.closer_2),
     division:
-      row.division ??
-      indexed?.division ??
-      row.dealer_name ??
-      null,
+      row.division ?? indexed?.division ?? row.dealer_name ?? null,
     region: row.region ?? indexed?.region ?? null,
     team: row.team ?? indexed?.team ?? null,
     officeName: row.office_name ?? indexed?.officeName ?? null,
@@ -114,42 +112,64 @@ function toTapeCustomer(
   };
 }
 
-async function fetchAllRows(): Promise<TapeCustomerRow[]> {
+async function fetchRows(stages?: PipelineStage[]): Promise<TapeCustomerRow[]> {
   const supabase = createServerSupabase();
+  const schema = await getTapeSchema();
 
-  let select = [...BASE_COLUMNS, ...OPTIONAL_COLUMNS].join(", ");
-  let result = await supabase
+  const optionalColumns = [
+    ...(schema.hasPipeline ? PIPELINE_COLUMNS : []),
+    ...(schema.hasOrg ? ORG_COLUMNS : []),
+  ];
+  const select = [...BASE_COLUMNS, ...optionalColumns].join(", ");
+
+  let query = supabase
     .from("tape_customers")
     .select(select)
     .order("customer_name", { ascending: true, nullsFirst: false });
 
-  if (
-    result.error &&
-    OPTIONAL_COLUMNS.some((col) => result.error!.message.includes(col))
-  ) {
-    select = BASE_COLUMNS.join(", ");
-    result = await supabase
-      .from("tape_customers")
-      .select(select)
-      .order("customer_name", { ascending: true, nullsFirst: false });
+  if (schema.hasPipeline && stages?.length) {
+    query = query.in("pipeline_stage", stages);
   }
 
+  const result = await query;
   if (result.error) throw new Error(result.error.message);
   return (result.data ?? []) as unknown as TapeCustomerRow[];
 }
 
-export async function listTapeCustomers(): Promise<TapeCustomer[]> {
+async function loadRows(stageKey: string): Promise<TapeCustomerRow[]> {
+  const stages =
+    stageKey === "all" ? undefined : (stageKey.split(",") as PipelineStage[]);
+  return fetchRows(stages);
+}
+
+function getRowsCached(stageKey: string) {
+  return unstable_cache(
+    async () => loadRows(stageKey),
+    ["tape-customer-rows", stageKey],
+    { revalidate: 60, tags: ["tape-customers"] }
+  )();
+}
+
+async function loadCustomers(stages?: PipelineStage[]): Promise<TapeCustomer[]> {
+  const stageKey = stages?.length ? stages.join(",") : "all";
   const index = readPipelineIndex();
-  const rows = await fetchAllRows();
-  return rows.map((row) => toTapeCustomer(row, index));
+  const rows = await getRowsCached(stageKey);
+  const customers = rows.map((row) => toTapeCustomer(row, index));
+
+  if (stages?.length) {
+    return customers.filter((c) => stages.includes(c.pipelineStage));
+  }
+  return customers;
 }
 
-export async function listTapeDeals(): Promise<TapeCustomer[]> {
-  const customers = await listTapeCustomers();
+export const listTapeCustomers = cache(async () => loadCustomers());
+
+export const listTapeDeals = cache(async () => {
+  const customers = await loadCustomers(DEAL_STAGES);
   return customers.filter((c) => DEAL_STAGES.includes(c.pipelineStage));
-}
+});
 
-export async function listTapeInstalls(): Promise<TapeCustomer[]> {
-  const customers = await listTapeCustomers();
+export const listTapeInstalls = cache(async () => {
+  const customers = await loadCustomers(INSTALL_STAGES);
   return customers.filter((c) => INSTALL_STAGES.includes(c.pipelineStage));
-}
+});
